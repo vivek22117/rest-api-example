@@ -1,0 +1,224 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Cloudformatin template for VPC and subnets",
+  "Parameters": {
+    "VpcCidrBlock": {
+      "Description": "Vpc CIDR block range",
+      "Type": "String",
+      "Default": "10.0.0.0/22"
+    }
+  },
+  "Resources": {
+    //Best practice is per VPC per development environment devl, qual, prod
+    "DoubleDigitVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {"Ref": "VpcCidrBlock"},
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true",
+        "InstanceTenancy": "default",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "double-digit-vpc"
+          },
+          {
+            "Key": "component",
+            "Value": "double-digit-test"
+          },
+          {
+            "Key": "environment",
+            "Value": "{{env}}"
+          }
+        ]
+      }
+    },
+    //Subnets are specific to single AZ's and provides HighAvailability and Fault Tolerance. Resilient for Data Loss
+    "PublicSubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "DoubleDigitVPC"
+        },
+        "CidrBlock": "10.0.0.0/24",
+        "AvailabilityZone": "us-east-1a",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "dd-public-subnet-1a"
+          },
+          {
+            "Key": "component",
+            "Value": "double-digit-test"
+          },
+          {
+            "Key": "environment",
+            "Value": "{{env}}"
+          },
+          {
+            "Key": "Scope",
+            "Value": "public"
+          }
+        ]
+      }
+    },
+    //Any thing launch in this subnet will be able to communicate to internet
+    "PublicSubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "DoubleDigitVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": "us-east-1b",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "dd-public-subnet-1b"
+          },
+          {
+            "Key": "component",
+            "Value": "double-digit-test"
+          },
+          {
+            "Key": "environment",
+            "Value": "{{env}}"
+          },
+          {
+            "Key": "Scope",
+            "Value": "public"
+          }
+        ]
+      }
+    },
+    //used to launch databases
+    "PrivateSubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "DoubleDigitVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": "us-east-1a",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "dd-private-subnet-1a"
+          },
+          {
+            "Key": "component",
+            "Value": "double-digit-test"
+          },
+          {
+            "Key": "environment",
+            "Value": "{{env}}"
+          },
+          {
+            "Key": "Scope",
+            "Value": "private"
+          }
+        ]
+      }
+    },
+    "PrivateSubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "DoubleDigitVPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": "us-east-1b",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "dd-private-subnet-1b"
+          },
+          {
+            "Key": "component",
+            "Value": "double-digit-test"
+          },
+          {
+            "Key": "environment",
+            "Value": "{{env}}"
+          },
+          {
+            "Key": "Scope",
+            "Value": "private"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "StackVPC": {
+      "Description": "The ID of the VPC",
+      "Value": {
+        "Ref": "DoubleDigitVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "VPCCidr": {
+      "Description": "The CIDR Block of the VPC",
+      "Value": {
+        "Ref": { "Fn::GetAtt" : [ "DoubleDigitVPC", "CidrBlock" ] }
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCCidrBlock"
+        }
+      }
+    },
+    "PublicSubnetAId": {
+      "Description": "The ID of Public Subnet A",
+      "Value": {
+        "Ref": "PublicSubnetA"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SubnetId-A"
+        }
+      }
+    },
+    "PublicSubnetBId": {
+      "Description": "The ID of Public Subnet B",
+      "Value": {
+        "Ref": "PublicSubnetB"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SubnetId-B"
+        }
+      }
+    },
+    "PrivateSubnetBId": {
+      "Description": "The ID of Private Subnet B",
+      "Value": {
+        "Ref": "PrivateSubnetB"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnetId-B"
+        }
+      }
+    },
+    "PrivateSubnetAId": {
+      "Description": "The ID of Private Subnet A",
+      "Value": {
+        "Ref": "PrivateSubnetA"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnetId-A"
+        }
+      }
+    }
+  }
+  }

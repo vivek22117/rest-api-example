@@ -1,0 +1,39 @@
+#Validate template
+aws cloudformation validate-template --template-body file://cloudformation/network/aws-vpc-security-level-two.json
+
+#Create change-set and capture its id
+CHANGE_SET_ID=$(aws --profile dev cloudformation create-change-set --change-set-name nacl-egress-ingress \
+--stack-name aws-vpc-security-level-two \
+--parameters ParameterKey=VPCStackName, UsePreviousValue=true \
+--query 'Id' --output text)
+
+#echo change set id
+echo ${CHANGE_SET_ID}
+
+#describe change set
+aws --profile dev cloudformation describe-change-set \
+--change-set-name ${CHANGE_SET_ID} \
+--query '[StackName,Changes[].ResourceChange]' \
+--output text
+
+#Apply change for change stack
+aws --profile dev cloudformation execute-change-set \
+--change-set-name ${CHANGE_SET_ID}
+
+#Wait to change set to complete
+aws --profile dev cloudformation wait stack-update-complete \
+--stack-name vpc-security-level-two
+
+#grab vpc id for programatic use
+VPC_ID=$(aws --profile dev ec2 describe-vpcs \
+--filters "Name=tag:Name, Values=double-digit-vpc" \
+--query 'Vpcs[0].VpcId' --output text)
+
+#describe network acls
+aws --profiel dev ec2 describe-network-acls \
+--filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:aws:cloudformation:stack-name, Values=vpc-security-level-two" \
+--query 'NetworkAcls[].Entries[].{Num:RuleNumber, Rule:RuleAction, Range:CidrBlock,\
+Protocol:Protocol, Egress:Egress, Ingress:Ingress,Ports.join(`-`, [to_String(PortRange.From), to_String(PortRange.To)])}' \
+--output table
+
+

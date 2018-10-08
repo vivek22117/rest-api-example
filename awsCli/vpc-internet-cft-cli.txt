@@ -1,0 +1,32 @@
+#Validate template
+aws cloudformation validate-template --template-body file://cloudformation/network/aws-vpc-internet.json
+
+#Creaate cloudformation
+aws --profile dev cloudformation create-stack --stack-name vpc-internet \
+--template-body file://cloudformation/network/aws-vpc-internet.json \
+--parameters ParameterKey=VPCStackName, ParameterValue=vpc-subnet-network
+
+#grab vpc id for programatic use
+VPC_ID=$(aws --profile dev ec2 describe-vpcs --filters "Name=tag:Name, \
+         Values=double-digit-vpc" --query 'Vpcs[0].VpcId' --output text)
+
+
+#wait for stack creation to finish
+aws --profile dev cloudformation wait create-stack-complete --stack-name vpc-internet
+
+#get stack create events details
+aws --profile dev cloudformation describe-stack-events \
+--stack-name vpc-internet \
+--query 'StackEvents[].[{Resource:LogicalResourceId, Status:ResourceStatus, Reason:ResourceStatusReason}]' \
+--output table
+
+
+
+#find route in vpc
+aws --profile dev ec2 describe-route-tables --filters "Name=vpc-id, Values=${VPC_ID}"
+
+#describe subnets in a VPC
+aws --profile dev ec2 describe-route-tables \
+--filters "Name=vpc-id, Values=${VPC_ID}" \
+--query 'RouteTables.[].[Tag[?Key==`Name`].value, Associations[].SubnetId]' \
+--output table

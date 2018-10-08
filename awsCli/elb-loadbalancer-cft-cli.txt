@@ -1,0 +1,30 @@
+#Validate Template
+aws cloudformation validate-template --template-body \
+file://cloudformation/loadbalancing/aws-elb-for-webservers.json --query \
+'Parameters[].[ParameterKey,Description]' --output table
+
+
+#Variables
+STACK_NAME = elb-loadbalancer-webservers-devl
+ELB_NAME = elb-loadbalancer
+
+#create template
+aws --profile dev cloudformation create-stack \
+--stack-name ${STACK_NAME} \
+--template-body file://cloudformation/autoscaling/aws-elb-for-webservers.json \
+--Parameters \
+ParameterKey=VPCStackName, ParameterValue=double-digit-vpc \
+ParameterKey=ELBName, ParameterValue=${ELB_NAME} \
+&& aws --profile dev cloudformation wait create-stack-complete --stack-name ${STACK_NAME}
+
+
+#Describe stack creation events
+aws --profile dev cloudformation describe-stack-events --stack-name ${STACK_NAME} \
+--query 'StackEvents[].[{Resource:LogicalResourceId, Status:ResourceStatus, Reason:ResourceStatusReason}]' \
+--output table
+
+#Describe stack resources
+aws --profile dev cloudformation describe-stack-resources \
+--stack-name ${STACK_NAME} \
+--query 'StackResources[].[LogicalResourceId,ResourceStatus]' --output table
+

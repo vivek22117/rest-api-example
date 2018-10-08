@@ -1,0 +1,205 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Create User Groups and Policies",
+  "Parameters": {
+    "VPCStackName": {
+      "Description": "VPC to refer",
+      "Type": "String"
+    },
+    "KeyName": {
+      "Default": "{{ECKeyName}}",
+      "Description": "Key pair for ec2 instances",
+      "Type": "AWS::EC2::KeyPair::KeyName"
+    },
+    "AMI": {
+      "Default": "{{AMIImage}}",
+      "Description": "ec2 Instance image ID",
+      "Type": "AWS::EC2::Image::Id"
+    },
+    "InstanceType" : {
+      "Description" : "WebServer EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.micro",
+      "AllowedValues" : [ "t1.micro", "t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    }
+  },
+  "Resources": {
+    //It defines what gets launched
+    "EC2ASGLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "ImageId": {
+          "Ref": "AMI"
+        },
+        "InstanceMonitoring": true,
+        "EbsOptimized": true,
+        "InstanceType": { "Ref" : "InstanceType" },
+        "SecurityGroups": [ { "Ref" : "InstanceSecurityGroup" } ],
+        "UserData": { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash -xe\n",
+          "yum update -y aws-cfn-bootstrap\n",
+
+          "yum install -y aws-cli\n",
+
+          "/opt/aws/bin/cfn-init -v ",
+          "         --stack ", { "Ref" : "AWS::StackName" },
+          "         --resource LaunchConfig ",
+          "         --region ", { "Ref" : "AWS::Region" }, "\n",
+
+          "/opt/aws/bin/cfn-signal -e $? ",
+          "         --stack ", { "Ref" : "AWS::StackName" },
+          "         --resource WebServerGroup ",
+          "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      }
+    },
+    "EC2ClusterASGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones": [
+          {
+            "Ref": "AvailabilityZone"
+          }
+        ],
+        "TargetGroupARNs" : [ { "Ref" : "ALBTargetGroup" } ],
+        "MaxSize": 2,
+        "MinSize": 1,
+        "DesiredCapacity": 1,
+        "LaunchConfigurationName": {
+          "Ref": "EC2ASGLaunchConfig"
+        },
+        "LoadBalancerNames": [
+          {
+            "Ref": "LoadBalancer"
+          }
+        ],
+        "VPCZoneIdentifier": [
+          {
+            "Ref": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-PrivateSubnetId-B"}}]
+          },
+          {
+            "Ref": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-PrivateSubnetId-A"}}]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "DD-ASG"
+          },
+          {
+            "Key": "component",
+            "Value": "double-digit-test"
+          },
+          {
+            "Key": "environment",
+            "Value": "{{env}}"
+          },
+          {
+            "Key": "Scope",
+            "Value": "private"
+          }
+        ]
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": "1",
+          "MaxBatchSize": "1",
+          "PauseTime" : "PT15M",
+          "WaitOnResourceSignals": "true"
+        }
+      }
+    },
+    "ALBTargetGroup" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties" : {
+        "HealthCheckIntervalSeconds" : 30,
+        "HealthCheckTimeoutSeconds" : 5,
+        "HealthyThresholdCount" : 3,
+        "HealthCheckProtocol": "HTTP",
+        "Matcher" : {
+          "HttpCode" : "200"
+        },
+        "Port" : 80,
+        "Protocol" : "HTTP",
+        "UnhealthyThresholdCount" : 5,
+        "Name" : "Webserver-TargetGroup",
+        "VpcId" : { "Ref": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-VPCId"}}]},
+        "TargetGroupAttributes" : [
+          {
+            "Key" : "deregistration_delay.timeout_seconds",
+            "Value" : 60
+          }
+        ],
+        "Tags" : [
+          { "Key" : "Name", "Value" : "webserver-TG" },
+          { "Key" : "component", "Value" : "double-digit-test" },
+          { "Key" : "environment", "Value" : "{{env}}" }
+        ]
+      }
+    },
+    "WebServerScaleUpPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "EC2ClusterASGroup" },
+        "Cooldown" : "60",
+        "ScalingAdjustment" : "1"
+      }
+    },
+    "WebServerScaleDownPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "EC2ClusterASGroup" },
+        "Cooldown" : "60",
+        "ScalingAdjustment" : "-1"
+      }
+    },
+    "InstanceSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access and HTTP from the load balancer only",
+        "VpcId" : { "Ref": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-VPCId"}}]},
+        "SecurityGroupIngress" : [ {
+          "IpProtocol" : "tcp",
+          "FromPort" : 1024,
+          "ToPort" : 65535,
+          "CidrIp" : { "Ref" : [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-VPCCidrBlock"}}]}
+        },
+        {
+          "IpProtocol" : "tcp",
+          "FromPort" : "80",
+          "ToPort" : "80",
+          "CidrIp" : "0.0.0.0/0"
+        },
+        {
+          "IpProtocol" : "upd",
+          "FromPort" : 123,
+          "ToPort" : 123,
+          "CidrIp" : "0.0.0.0/0"
+        },
+        {
+          "IpProtocol": "ssh",
+          "FromPort": 22,
+          "ToPort": 22,
+          "CidrIp": "myIp"
+        }],
+        "SecurityGroupEgress" : [{
+          "IpProtocol" : "-1",
+          "CidrIp" : "0.0.0.0/0"
+        }]
+      }
+    }
+  },
+  "outputs":{
+    "TargetGroup" : {
+      "Description" : "The URL of the website",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [
+        "ApplicationLoadBalancer", "DNSName" ]}]]}
+    }
+  }
+}

@@ -1,0 +1,32 @@
+#CREATE KEY PAIR (It Will output your key on termial, so be careful)
+aws --profile dev ec2 create-key-pair --key-name restAPIKeyPair
+
+
+#DELETE A KEY PAIR
+aws --profile dev ec2 delete-key-pair --key-name restAPIKeyPair
+
+
+#CREATE KEY PAIR AND SAVE TO FILE
+aws --profile dev ec2 create-key-pair --key-name restAPIKeyPair --query 'KeyMaterial' --output text > ./lab.pem
+
+#LIST ALL KEY PAIR
+aws --profile dev ec2 describe-key-pairs
+
+#GENERATE AND IMPORT YOUR CREATE KEY PAIR ON AWS
+a.GENERATE KEY PAIR
+openssl genrsa -out ./lab.pem 2048
+
+b.RESTRICT ACCESS
+chmod 400 ./lab.pem
+
+c.GET PUBLIC KEY of KEY_PAIR
+openssl rsa -in ./lab.pem -pubout 2>/dev/null
+
+d.REMOVE UNWANTED LINENS AND CHARACTERS
+openssl rsa -in ./lab.pem -pubout 2>/dev/null | awk '/-END PUBLIC KEY-/ {p = 0}; p{printgf "%s", $0}; /-BEGIN PUBLIC KEY-/ {p = 1}'
+
+e.IMPORT KEY TO AWS
+aws --profile dev ec2 import-key-pair \
+--key-name lab \
+--public-key-material \
+"$(openssl rsa -in ./lab.pem -pubout 2>/dev/null | awk '/-END PUBLIC KEY-/ {p = 0}; p{printgf "%s", $0}; /-BEGIN PUBLIC KEY-/ {p = 1}')"

@@ -1,0 +1,25 @@
+#Validate template
+aws cloudformation validate-template --template-body file://cloudformation/network/aws-vpc-security-level-one.json
+
+#Creaate cloudformation
+aws --profile dev cloudformation create-stack \
+--stack-name vpc-internet \
+--template-body file://cloudformation/network/aws-vpc-security-level-one.json \
+--parameters ParameterKey=VPCStackName, ParameterValue=vpc-subnet-network
+
+
+#grab vpc id for programatic use
+VPC_ID=$(aws --profile dev ec2 describe-vpcs \
+--filters "Name=tag:Name, Values=double-digit-vpc" \
+--query 'Vpcs[0].VpcId' --output text)
+
+
+#wait for stack creation to finish
+aws --profile dev cloudformation wait create-stack-complete \
+--stack-name vpc-security-level-one
+
+#list NACL entries
+aws -profile dev ec2 describe-networ-acls \
+--filters "Name=vpc-id, Values=${VPC_ID}" "Name=tag:aws:cloudformation:stack-name, Values=vpc-security-level-one" \
+--query 'NetworkAcls[].Entries[]'
+

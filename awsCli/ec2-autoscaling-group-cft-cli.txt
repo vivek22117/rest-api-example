@@ -1,0 +1,34 @@
+#Validate template
+aws cloudformation validate-template --template-body \
+file://cloudformation/compute/aws-ec2-atuoscaling-group.json --query \
+'Parameters[].[ParameterKey,Description]' --output table
+
+#Variables
+STACK_NAME = "ec2-autoscaling-group-devl"
+AMI_ID = "abacd"
+
+#Create template
+aws --profile dev cloudformation create-stack \
+--stack-name ${STACK_NAME} \
+--template-body file://cloudformation/compute/aws-autoscaling-group.json \
+--parameters \
+ParameterKey=VPCStackName, ParameterValue=double-digit-vpc \
+ParameterKey=KeyName, ParameterValue=double-digit-test \
+ParameterKey=AMI, ParameterValue=${AMI_ID} \
+ParameterKey=InstanceType, ParameterValue=t2.micro \
+&& aws --profile dev cloudformation wait stack-complete --stack-name ${STACK_NAME}
+
+
+#Descibe stack creation events
+aws --profile dev cloudformation describe-stack-events --stack ${STACK_NAME} --query \
+'StackEvents[].[{Resource:LogicalResourceId, Status:ResourceStatus, Reason:ResourceStatusReason}]' \
+--output table
+
+
+#Describe stack resources
+aws --profile dev cloudformation describe-stack-resources \
+--stack-name ${STACK_NAME} \
+--query 'StackResources[].[LogicalResourceId,ResourceStatus]' --output table
+
+
+

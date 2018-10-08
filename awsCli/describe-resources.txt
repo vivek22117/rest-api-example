@@ -1,0 +1,24 @@
+#use this command to list all vpcs
+aws --profile dev ec2 describe-vpcs
+
+
+#filter vpc by tag name
+aws --profile dev ec2 describe-vpcs --filters "Name=tag:Name, Values=double-digit-vpc"
+
+
+#grab vpc id for programatic use
+VPC_ID=$(aws --profile dev ec2 describe-vpcs --filters "Name=tag:Name, Values=double-digit-vpc" --query 'Vpcs[0].VpcId' --output text)
+
+#verify vpc id
+echo ${VPC_ID}
+
+#find subnets under particular vpc id
+aws --profile dev ec2 describe-subnets --filters "Name=vpc-id, Values=${VPC_ID}"
+
+
+#find subnets
+aws --profile dev ec2 describe-subnets --filters "Name=vpc-id, Values=${VPC_ID}" --query 'Subnets[].[SubnetId,CidrBlock]' --output table
+
+#describe subnets in a VPC
+aws --profile dev ec2 describe-subnets --filters "Name=vpc-id, Values=${VPC_ID}" --query 'Subnets[].[Tags[?Key==`Name`]|[0].Value,
+SubnetId,CidrBlock,Tags[?Key==`Scope`]|[0].Value,AvailableIpAddressesCount,AvailabilityZone]' --output table

@@ -1,0 +1,45 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Create User Groups and Policies",
+  "Resources":{
+    "DeveloperGroups":{
+      "Type":"AWS::IAM::Group",
+      "Properties":{
+        "GroupName": "Developers"
+      }
+    },
+    "EC2AccessPolicy" : {
+      "Type" : "AWS::IAM::ManagedPolicy",
+      "Properties" : {
+        "Description" : "Policy for EC2 Access",
+        "ManagedPolicyName": "EC2LimitedAccess",
+        "Path" : "/",
+        "PolicyDocument" :   {
+          "Version":"2012-10-17",
+          "Statement" : [{
+            "Effect" : "Allow",
+            "Action" : [
+              "ec2:runInstances",
+              "ec2:startInstances",
+              "ec2:stopInstances"
+            ],
+            "Resource" : "*",
+            "Condition" : {
+              "StringEquals" : { "ec2:InstanceType" : "t2-micro" }
+              }
+            },
+            {
+              "Effect" : "Allow",
+              "Action" : [
+                "iam:*AccessKey*",
+                "iam:ChangePassword"
+              ],
+              "Resource" : {"Fn::Join" : [ ":", ["arn:aws:iam:", { "Ref" : "AWS::AccoundId" }, "user/${aws:username}"] ]}
+            }
+          ]
+        },
+        "Groups" : {"Ref" : "DeveloperGroups"}
+      }
+    }
+  }
+}

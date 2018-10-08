@@ -1,0 +1,85 @@
+{
+   "AWSTemplateFormatVersion": "2010-09-09",
+   "Resources": {
+      "EC2Role": {
+         "Type": "AWS::IAM::Role",
+         "Properties": {
+            "RoleName": "EC2Role",
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "ec2.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies": [ {
+               "PolicyName": "EC2InstancePolicy",
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement":
+                  [
+                     {
+                     "Effect": "Allow",
+                     "Action": [
+                        "ec2:DeleteVolume",
+                        "ec2:CreateSnapshot",
+                        "ec2:DescribeSnapshot"
+                     ],
+                     "Resource": "*"
+                     },
+                     {
+                        "Effect": "Deny",
+                        "Action": [
+                           "ec2:DeleteVolume"
+                        ],
+                        "Resources": "*"
+                     }
+                  ]
+               }
+               } ]
+            }
+      },
+      "RootInstanceProfile": {
+         "Type": "AWS::IAM::InstanceProfile",
+         "Properties": {
+            "Path": "/",
+            "InstanceProfileName":"EC2InstanceProfile",
+            "Roles": [ {
+               "Ref": "EC2Role"
+            } ]
+         }
+      },
+      "EC2ClusterRole": {
+         "Type": "AWS::IAM::Role",
+         "Properties": {
+            "RoleName": "EC2ClusterRole",
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "ec2.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "ManagedPolicyArns":"arn:aws:iam::aws:policy/service-role/"
+         }
+      },
+      "EC2ClusterInstanceProfile": {
+         "Type": "AWS::IAM::InstanceProfile",
+         "Properties": {
+            "Path": "/",
+            "InstanceProfileName":"EC2ClusterProfile",
+            "Roles": [ {
+               "Ref": "EC2ClusterRole"
+            } ]
+         }
+      }
+   }
+}

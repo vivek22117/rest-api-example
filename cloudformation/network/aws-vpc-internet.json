@@ -1,0 +1,196 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Internet Gateway and route table cloudformation for VPC",
+  "Parameters": {
+    "VPCStackName": {
+      "Description": "VPC to refer",
+      "Type": "String"
+    }
+  },
+  //It is a device which is used to route traffic from one network to another
+  "DoubleDigitInternet": {
+    "Type": "AWS::EC2::InternetGateway",
+    "Properties": {
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "double-digit-internet"
+        },
+        {
+          "Key": "component",
+          "Value": "double-digit-test"
+        },
+        {
+          "Key": "environment",
+          "Value": "{{env}}"
+        }
+      ]
+    }
+  },
+  //Attache internet gatewaty to vpc. It is required
+  "AttachInternetGateway": {
+    "Type": "AWS::EC2::VPCGatewayAttachment",
+    "Properties": {
+      "VpcId": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-VPCId"}}],
+      "InternetGatewayId": {
+        "Ref": "DoubleDigitInternet"
+      }
+    }
+  },
+  //It is call first line of Defence or Security. Route Table  is used only for routing(traffic flow) between network, it does not know what is port and protocols. If a subnet is not expcilitly
+  //associated to a route table it is implicitly associated to MAIN route table.
+  //Best practice says that you should create route table for internet gateway and left you MAIN route table to be private
+  //This route table is specific for my internet traffic to come in.
+  "DDPublicTrafficRouteTable": {
+    "Type": "AWS::EC2::RouteTable",
+    "Properties": {
+      "VpcId": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-VPCId"}}],
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "DD-PublicTraffic-RouteTable"
+        },
+        {
+          "Key": "component",
+          "Value": "double-digit-test"
+        },
+        {
+          "Key": "environment",
+          "Value": "{{env}}"
+        },
+        {
+          "Key": "Scope",
+          "Value": "public"
+        }
+      ]
+    }
+  },
+  //Define route for internet gateway which we have created. It is route to the route table
+  "DoublDigitRoute": {
+    "Type": "AWS::EC2::Route",
+    "DependsOn": "AttachInternetGateway",
+    "Properties": {
+      "RouteTableId": {
+        "Ref": "DDRouteTable"
+      },
+      "DestinationCidrBlock": "0.0.0.0/0",
+      "GatewayId": {
+        "Ref": "DoubleDigitInternet"
+      }
+    }
+  },
+  //Associate public subnet to route table create above so that public subnet can talk to internet
+  "DDPublicSubnetARouteTableAssociation": {
+    "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    "Properties": {
+      "SubnetId": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-SubnetId-B"}}],
+      "RouteTableId": {
+        "Ref": "DDPublicTrafficRouteTable"
+      }
+    }
+  },
+  //Associate public subnet to route table create above so that public subnet can talk to internet
+  "DDPublicSubnetBRouteTableAssociation": {
+    "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    "Properties": {
+      "SubnetId": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-SubnetId-A"}}],
+      "RouteTableId": {
+        "Ref": "DDPublicTrafficRouteTable"
+      }
+    }
+  },
+  //Allows one way communication to the internet. it is basically for private subnet to connect to internet.
+  //Network Address Translation does this work.
+  //It is created in public subnet and that's why our route to internet is through public subnet for private subnets
+  "DDNetworkGateway": {
+    "DependsOn": "AttachInternetGateway",
+    "Type": "AWS::EC2::NatGateway",
+    "Properties": {
+      "AllocationId": {
+        "Fn::GetAtt": [
+          "EIP",
+          "AllocationId"
+        ]
+      },
+      "SubnetId": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-SubnetId-A"}}],
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "dd-network-gateway-1a"
+        },
+        {
+          "Key": "component",
+          "Value": "double-digit-test"
+        },
+        {
+          "Key": "environment",
+          "Value": "{{env}}"
+        }
+      ]
+    }
+  },
+  "EIP": {
+    "Type": "AWS::EC2::EIP",
+    "Properties": {
+      "Domain": "vpc"
+    }
+  },
+  //It is only for one way internet traffic which route  through nat gateway
+  "DDEgressOnlyRouteTable": {
+    "Type": "AWS::EC2::RouteTable",
+    "Properties": {
+      "VpcId": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-VPCId"}}],
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "DD-egress-RouteTable"
+        },
+        {
+          "Key": "component",
+          "Value": "double-digit-test"
+        },
+        {
+          "Key": "environment",
+          "Value": "{{env}}"
+        },
+        {
+          "Key": "Scope",
+          "Value": "private"
+        }
+      ]
+    }
+  },
+  //Define route to internet through network gateway
+  "DoublDigitEgressRoute": {
+    "Type": "AWS::EC2::Route",
+    "DependsOn": "DDNetworkGateway",
+    "Properties": {
+      "RouteTableId": {
+        "Ref": "DDEgressOnlyRouteTable"
+      },
+      "DestinationCidrBlock": "0.0.0.0/0",
+      "GatewayId": {
+        "Ref": "DDNetworkGateway"
+      }
+    }
+  },
+  //Associate private subnet to create route table which allow them to talk to internet in one way.
+  "DDPrivateSubnetARouteTableAssociation": {
+    "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    "Properties": {
+      "SubnetId": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-PrivateSubnetId-A"}}],
+      "RouteTableId": {
+        "Ref": "DDEgressOnlyRouteTable"
+      }
+    }
+  },
+  "DDPrivateSubnetBRouteTableAssociation": {
+    "Type": "AWS::EC2::SubnetRouteTableAssociation",
+    "Properties": {
+      "SubnetId": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-PrivateSubnetId-B"}}],
+      "RouteTableId": {
+        "Ref": "DDEgressOnlyRouteTable"
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+#check profile list
+aws configure lists
+
+#configure profile as "admin"
+aws --profile admin configure
+
+
+#ceck profile status
+aws --profile admin configure list

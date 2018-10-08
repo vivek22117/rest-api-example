@@ -1,0 +1,20 @@
+#validate the template
+aws cloudformation validate-template --template-body file://cloudformation/network/aws-vpc-subnet-network.json
+
+#create stack using template file
+aws --profile dev cloudformation create-stack \
+--stack-name vpc-subnet-network \
+--template-body file://cloudformation/network/aws-vpc-subnet-network.json \
+--parameters ParameterKey=VpcCidrBlock,ParameterValue=10.0.0.0/22
+
+#wait for stack to complete
+aws --profile dev cloudformation wait stack-create-complete \
+--stack-name vpc-subnet-network
+
+echo 'Waiting for template to complete......'
+
+#list the exports done during cloudformation
+aws --profile dev cloudformation list-exports --query 'Exports[].[Name,Value]' --output table
+
+
+

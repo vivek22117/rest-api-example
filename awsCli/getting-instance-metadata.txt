@@ -1,0 +1,19 @@
+#CAPTURE INSTANCE PUBLIC IP
+INSTANCE_PUBLIC_IP=$(aws --profile dev ec2 describe-instances \
+                    --query 'Reservation[0].Instances[0].PublicIpAddress' \
+                    --output text)
+
+echo $INSTANCE_PUBLIC_IP
+
+#SSH INTO EC2 Instance
+ssh -i ./lab.pem ec2-user@${INSTANCE_PUBLIC_IP}
+
+#GET INSTANCE METADATA USING CURL (list out name of metadata which we can get)
+curl http://169.254.169.254/latest/meta-data/
+
+#METADATA EXAMPLE
+curl http://169.254.169.254/latest/meta-data/local-hostname
+curl http://169.254.169.254/latest/meta-data/instance-id
+
+#CAPTURE PRIVATE IP ADDRESS of INSTANCE USING META-DATA
+LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
