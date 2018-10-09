@@ -1,0 +1,31 @@
+#DEFINE VARIABLES
+DB_PASSWORD='@@doubledigit1487'
+DB_USER='doubledigit'
+ENVIRONMENT='dev'
+STACK_NAME='rds-microservice-postgres'
+VPC_STACK_NAME = 'vpc-subnet-network'
+VPC_ID=$(aws --profile dev ec2 describe-vpcs \
+        --filters "Name=tag:Name, Values=double-digit-vpc" \
+        --query 'Vpcs[0].VpcId' --output text)
+
+#VALIDATE TEMPLATE
+aws cloudformation validate-template \
+--template-body file://cloudformation/database/aws-rds-database.json \
+--query 'Parameters[].[ParameterKey,Description]' --output table
+
+#CREATE TEMPLATE
+aws --profile dev cloudformation create-stack \
+--stack-name ${STACK_NAME} \
+--template-body file://cloudformation/database/aws-rds-database.json \
+--parameters ParameterKey=NetworkStack, ParameterValue=${VPC_STACK_NAME} \
+ParameterKey=Environment, ParameterValue=${ENVIRONMENT} \
+ParameterKey=DBUser, ParameterValue=${DB_USER} \
+ParameterKey=DBPassword, ParameterValue=${DB_PASSWORD}
+
+#WAIT FOR STACK TO COMPLETE
+aws --profile dev cloudformation wait stack-create-complete --stack-name ${STACK_NAME}
+
+#DESCRIBE STACK EVENTS
+aws --profile dev cloudformation describe-stack-events --stack-name ${STACK_NAME} \
+--query 'StackEvents[].[{Resource:LogicalResourceId, Status:ResourceStatus, Reason:ResourceStatusReason}]' \
+--output table

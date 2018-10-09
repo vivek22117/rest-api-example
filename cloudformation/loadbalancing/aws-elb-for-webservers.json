@@ -1,0 +1,131 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description" : "AWS CloudFormation Sample Template AutoScalingMultiAZWithNotifications: Create a multi-az, load balanced and Auto Scaled sample web",
+  "Parameters": {
+    "VPCStackName": {
+      "Description": "VPC to refer",
+      "Type": "String"
+    },
+    "ELBName":{
+      "Description": "Name of the ELB"
+    }
+  },
+  "Resources":{
+    //Create an application load balancer for webservers, which will face to internet
+    "ApplicationLoadBalancer" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties" : {
+        "Scheme" : "internet-facing",
+        "Subnets" : [
+          {
+            "Ref": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-SubnetId-B"}}]
+          },
+          {
+            "Ref": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-SubnetId-A"}}]
+          }
+        ],
+        "Name": {"Ref": "ELBName"},
+        "LoadBalancerAttributes": [
+          {
+            "Key" : "idle_timeout.timeout_seconds",
+            "Value" : 10
+          }
+        ],
+        "SecurityGroups": {"Ref": "ELBSecurityGroup"},
+        "Tags" : [
+          { "Key" : "Name", "Value" : "ELB-Webserver" },
+          { "Key" : "component", "Value" : "double-digit-test" },
+          { "Key" : "environment", "Value" : "{{env}}" }
+        ]
+      }
+    },
+    "ALBListener" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties" : {
+        "DefaultActions" : [{
+          "Type" : "forward",
+          "TargetGroupArn" : { "Ref" : "ALBTargetGroup" }
+        }],
+        "LoadBalancerArn" : { "Ref" : "ApplicationLoadBalancer" },
+        "Port" : "80",
+        "Protocol" : "HTTP"
+      }
+    },
+    "ALBTargetGroup" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties" : {
+        "HealthCheckIntervalSeconds" : 30,
+        "HealthCheckTimeoutSeconds" : 5,
+        "HealthyThresholdCount" : 3,
+        "HealthCheckProtocol": "HTTP",
+        "Matcher" : {
+          "HttpCode" : "200"
+        },
+        "Port" : 80,
+        "Protocol" : "HTTP",
+        "UnhealthyThresholdCount" : 5,
+        "Name" : "Webserver-TargetGroup",
+        "VpcId" : { "Ref": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-VPCId"}}]},
+        "TargetGroupAttributes" : [
+          {
+            "Key" : "deregistration_delay.timeout_seconds",
+            "Value" : 60
+          }
+        ],
+        "Tags" : [
+          { "Key" : "Name", "Value" : "webserver-TG" },
+          { "Key" : "component", "Value" : "double-digit-test" },
+          { "Key" : "environment", "Value" : "{{env}}" }
+        ]
+      }
+    },
+    "ELBSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupName": "ELBSecurityGroup",
+        "GroupDescription" : "Enable SSH access and HTTP for ELB only",
+        "VpcId" : { "Ref": [{"Fn::ImportValue" : {"Fn::Sub" : "${VPCStackName}-VPCId"}}]}
+      }
+    },
+    "SGBaseIngressHTTP": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "IpProtocol": "tcp",
+        "FromPort": 80,
+        "ToPort": 80,
+        "CidrIp": "0.0.0.0/0",
+        "SourceSecurityGroupId": {
+          "Ref": "ELBSecurityGroup"
+        }
+      }
+    },
+    "SGBaseIngressHTTPS": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "CidrIp": "0.0.0.0/0",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "ELBSecurityGroup",
+            "GroupId"
+          ]
+        }
+      }
+    },
+    "OutboundRule": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties":{
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0",
+        "GroupId": {
+          "Fn::GetAtt": [
+            "ELBSecurityGroup",
+            "GroupId"
+          ]
+        }
+      }
+    }
+  }
+}
